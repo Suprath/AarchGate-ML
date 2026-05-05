@@ -62,6 +62,20 @@ class XGBConverter:
         base_score_str = learner['learner_model_param']['base_score']
         base_score = float(base_score_str.strip('[]'))
         
+        objective_obj = learner.get('objective', {})
+        objective_name = ""
+        if isinstance(objective_obj, dict):
+            objective_name = objective_obj.get('name', '')
+        elif isinstance(objective_obj, str):
+            objective_name = objective_obj
+            
+        if 'binary:logistic' in objective_name or 'binary:' in objective_name:
+            # For binary classification, base score is in probability space,
+            # so the margin base contribution is log(base_score / (1.0 - base_score))
+            margin_base = np.log(base_score / (1.0 - base_score))
+        else:
+            margin_base = base_score
+            
         # Extract feature names
         try:
             self.features = learner['feature_names']
@@ -73,7 +87,7 @@ class XGBConverter:
         print(f"Converter: Found {len(trees)} trees in model.")
         
         all_indicators = []
-        total_base_weight = self._quantize(base_score)
+        total_base_weight = self._quantize(margin_base)
         
         for tree in trees:
             leaves = self._walk_tree(tree, 0)
