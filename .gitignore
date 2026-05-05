@@ -1,0 +1,30 @@
+# Build artifacts
+build/
+bin/
+lib/
+*.o
+*.so
+*.a
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+
+# Debug/Temp files
+debug_*.txt
+docker_build.log
+temp.txt
+benchmark_output.txt
+mapping.txt
+
+# Models
+models/
+
+# Docker
+.docker_id
+
+# System
+.DS_Store
