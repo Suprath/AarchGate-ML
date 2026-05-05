@@ -13,11 +13,17 @@ sys.path.insert(0, BUILD_DIR)
 sys.path.insert(0, "/workspace")
 
 try:
+    import aarchgate_python
+    print(f"[PYTHON DEBUG] aarchgate_python loaded from: {aarchgate_python.__file__}", flush=True)
     from bindings.python.aarchgate import ApexEngine, builder_Load, builder_Const, builder_Add, builder_GT, builder_LT, builder_Select
     import bindings.python.aarchgate as apex
     from bindings.python.converter import XGBConverter
     print(f"Environment Verified: Loaded AarchGate Wrapper")
 except ImportError as e:
+    print(f"Failed to load AarchGate: {e}")
+    import traceback
+    traceback.print_exc()
+    sys.exit(1)
     print(f"Environment Failure: Could not load aarchgate_python: {e}")
     apex = None
 
@@ -51,7 +57,7 @@ def train_model(data):
     y = (y * 1000).astype(np.int64)
     
     model = xgb.XGBRegressor(
-        n_estimators=1, # Reduced to 1 tree for debugging
+        n_estimators=100,
         max_depth=6,
         learning_rate=0.1,
         tree_method='hist'
@@ -70,8 +76,8 @@ def run_benchmark():
     data = generate_synthetic_data(10**5) # Train on small set
     model, model_path = train_model(data)
     
-    # 2. Benchmark data (128M rows)
-    test_n = 128 * 10**6
+    # 2. Benchmark data (10M rows)
+    test_n = 10 * 10**6
     print(f"Preparing benchmark data ({test_n} rows)...")
     
     # Generate directly as numpy arrays to save memory (avoiding pandas OOM)
@@ -106,15 +112,15 @@ def run_benchmark():
     # Features: distance(f0), passenger_count(f1), pickup_hour(f2), day_of_week(f3), is_weekend(f4)
     # We use uint64 for everything (quantized)
     fields = [
-        ("f0", 0, 64, 0), # distance
-        ("f1", 8, 64, 0), # passenger_count
-        ("f2", 16, 64, 0), # pickup_hour
-        ("f3", 24, 64, 0), # day_of_week
-        ("f4", 32, 64, 0)  # is_weekend
+        ("distance", 0, 64, 0),
+        ("passenger_count", 8, 64, 0),
+        ("pickup_hour", 16, 64, 0),
+        ("day_of_week", 24, 64, 0),
+        ("is_weekend", 32, 64, 0)
     ]
     stride = 40
     engine.register_schema("taxi_schema", fields, stride)
-    engine.set_logic("taxi_schema", ir_root, 0) # 0 = BIT_SLICED mode
+    engine.set_logic("taxi_schema", ir_root, 0)
     
     print("Preparing quantized data...")
     # Shift features by +1000.0 to map standard normal to positive domain for unsigned JIT comparison
@@ -123,23 +129,12 @@ def run_benchmark():
     # Replicate to reach 128M rows (saves 20GB of generation memory)
     X_quantized = np.tile(X_quantized_small, (test_n // chunk_size, 1))
     
-    # Print the tree to see the leaves!
-    import json
-    print("\n--- Tree JSON ---")
-    print(json.dumps(model_json['learner']['gradient_booster']['model']['trees'][0], indent=2))
-    print("-----------------\n")
-    
-    # 3. Accuracy Test
-    print("\nStep 1: Accuracy Verification")
-    sample_data = X_quantized[:100]
     data_array = np.ascontiguousarray(X_quantized).view(np.uint8).ravel()
     
     # Accuracy Check (Task 1)
     print("\n=== Accuracy Verification (Truth Test) ===")
     matches = 0
     num_check = 64 # Check exactly 1 full bit-plane chunk
-    print(f"{'Row':<5} | {'Native (Scaled)':<15} | {'AarchGate':<15} | {'Match'}")
-    print("-" * 50)
     for i in range(num_check):
         native_scaled = int(native_preds[i] * converter.precision_multiplier)
         row_view = data_array[i*stride : (i+1)*stride]
@@ -147,7 +142,7 @@ def run_benchmark():
         
         # Verify delta is 0
         delta = abs(native_scaled - ag_val)
-        is_match = (delta <= 1) # Allow 1 off-by-one precision error due to fixed-point truncation
+        is_match = (delta <= 10) # Allow small cumulative rounding tolerance across 100 trees
         if is_match: matches += 1
         
         if i < 10 or i > 53: # Print edges of the chunk
@@ -160,6 +155,8 @@ def run_benchmark():
 
     # DEBUG: Trace the path to the leaves!
     tree = model_json['learner']['gradient_booster']['model']['trees'][0]
+
+    
     def find_path(node, target_val, current_path):
         if tree['left_children'][node] == -1:
             leaf_val = np.float32(tree['split_conditions'][node])
@@ -221,7 +218,8 @@ def run_benchmark():
         if i > 0:
             batch_view[0] = (batch_view[0] ^ (prev_batch_sum & 0xFF))
             
-        prev_batch_sum = engine.execute(batch_view, batch_size)
+        # Task 2 & 4: Enable Parallel Execution (4 P-Cores on M3)
+        prev_batch_sum = engine.execute(batch_view, batch_size, parallel=True, num_threads=4)
         total_sum += prev_batch_sum
     
     aarchgate_time = time.time() - start_time

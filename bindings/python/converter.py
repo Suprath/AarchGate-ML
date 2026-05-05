@@ -17,57 +17,76 @@ class XGBConverter:
             return json.load(f)
 
     def _quantize(self, value):
-        return int(value * self.precision_multiplier)
+        return int(round(value * self.precision_multiplier))
 
-    def _walk_tree(self, tree, node_idx=0):
+    def _walk_tree(self, tree, node_idx, current_cond=None):
         left_child = tree['left_children'][node_idx]
         right_child = tree['right_children'][node_idx]
         
         if left_child == -1: # Leaf
-            # Cast leaf weight to float32 to match XGBoost native precision before scaling
             raw_weight = np.float32(tree['split_conditions'][node_idx])
-            return apex.builder_Const(self._quantize(raw_weight))
+            # For the base leaf, we can return (None, weight)
+            return [(current_cond, self._quantize(raw_weight))]
         
         feature_idx = tree['split_indices'][node_idx]
-        # XGBoost internally uses float32 for thresholds. Cast to float32 before shifting.
-        raw_cond = np.float32(tree['split_conditions'][node_idx])
-        condition = self._quantize(raw_cond + np.float32(1000.0))
+        feature_name = self.features[feature_idx]
+        threshold = np.float32(tree['split_conditions'][node_idx])
         
-        left_node = self._walk_tree(tree, left_child)
-        right_node = self._walk_tree(tree, right_child)
+        # Cast threshold to float32 to match XGBoost native precision before scaling
+        # Shift by +1000.0 to match the data transformation
+        q_threshold = self._quantize(threshold + np.float32(1000.0))
         
-        feat_load = apex.builder_Load(f"f{feature_idx}")
-        cond_const = apex.builder_Const(condition)
+        load_f = apex.builder_Load(feature_name)
+        const_t = apex.builder_Const(q_threshold)
         
-        # XGBoost: if feat < condition then left else right
-        is_lt = apex.builder_LT(feat_load, cond_const)
-        print(f"[CONVERTER DEBUG] Node {node_idx}: F{feature_idx} < {raw_cond} (quant: {condition}) -> Left:{left_child}, Right:{right_child}")
-        return apex.builder_Select(is_lt, left_node, right_node)
+        is_lt = apex.builder_LT(load_f, const_t)
+        is_ge = apex.builder_Not(is_lt)
+        
+        left_cond = is_lt if current_cond is None else apex.builder_AND(current_cond, is_lt)
+        right_cond = is_ge if current_cond is None else apex.builder_AND(current_cond, is_ge)
+        
+        results = []
+        results.extend(self._walk_tree(tree, left_child, left_cond))
+        results.extend(self._walk_tree(tree, right_child, right_cond))
+        return results
 
     def convert(self, model_json):
-        # model_json['learner']['gradient_booster']['model']['trees']
-        try:
-            trees = model_json['learner']['gradient_booster']['model']['trees']
-        except KeyError:
-            trees = model_json['learner']['gradient_booster']['model_tree_log']['trees']
+        learner = model_json['learner']
+        gradient_booster = learner['gradient_booster']
+        model_type = gradient_booster.get('model_type', 'gbtree')
         
+        if model_type != 'gbtree':
+            raise ValueError(f"Unsupported model type: {model_type}")
+            
+        trees = gradient_booster['model']['trees']
+        base_score_str = learner['learner_model_param']['base_score']
+        base_score = float(base_score_str.strip('[]'))
+        
+        # Extract feature names
+        try:
+            self.features = learner['feature_names']
+        except KeyError:
+            # Fallback if names are missing
+            num_features = int(learner['learner_model_param']['num_feature'])
+            self.features = [f"f{i}" for i in range(num_features)]
+            
         print(f"Converter: Found {len(trees)} trees in model.")
         
-        # Extract global base score (margin)
-        try:
-            base_score_str = model_json['learner']['learner_model_param']['base_score']
-            base_score = float(base_score_str.strip('[]'))
-        except KeyError:
-            base_score = 0.5
-            
-        tree_roots = []
-        for tree in trees:
-            tree_roots.append(self._walk_tree(tree))
+        all_indicators = []
+        total_base_weight = self._quantize(base_score)
         
-        # Summation layer: recursive Add tree + base_score
-        tree_sum = self._sum_trees(tree_roots)
-        base_const = apex.builder_Const(self._quantize(base_score))
-        return apex.builder_Add(tree_sum, base_const)
+        for tree in trees:
+            leaves = self._walk_tree(tree, 0)
+            for cond, weight in leaves:
+                if cond is None:
+                    total_base_weight += weight
+                else:
+                    # SUM(popcount(cond) * weight)
+                    indicator = cond
+                    apex.builder_SetWeight(indicator, weight)
+                    all_indicators.append(indicator)
+        
+        return apex.builder_Add(apex.builder_Sum(all_indicators), apex.builder_Const(total_base_weight))
 
     def _sum_trees(self, roots):
         if not roots:

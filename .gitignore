@@ -16,6 +16,8 @@ venv/
 # Debug/Temp files
 debug_*.txt
 docker_build.log
+build_log.txt
+build_error.log
 temp.txt
 benchmark_output.txt
 mapping.txt

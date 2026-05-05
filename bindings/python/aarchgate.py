@@ -10,7 +10,9 @@ class ApexEngine:
     def set_logic(self, schema_name, ir_root, mode):
         return _apex.set_logic(self._engine, schema_name, ir_root, mode)
         
-    def execute(self, data, count):
+    def execute(self, data, count, parallel=False, num_threads=4):
+        if parallel:
+            return _apex.execute_parallel(self._engine, data, count, num_threads)
         return _apex.execute(self._engine, data, count)
 
 # Builder functions (proxies)
@@ -40,3 +42,9 @@ def builder_Select(cond, a, b):
 
 def builder_Sum(operands):
     return _apex.builder_Sum(operands)
+
+def builder_Not(a):
+    return _apex.builder_Not(a)
+
+def builder_SetWeight(node, weight):
+    return _apex.builder_SetWeight(node, weight)
