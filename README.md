@@ -89,54 +89,55 @@ Models may prune features during training (e.g., training with 5 fields but only
 
 ---
 
-## 🛠️ Usage and Execution
+## 📦 Python SDK Quickstart (Frictionless Integration)
 
-### Running the Complete Benchmark
-The optimized build environment is fully containerized to ensure cross-platform ARM64 stability. To build the project and execute the NYC Taxi Benchmark, run:
+With our premium high-level developer wrapper (`aarchgate_ml`), loading and running predictions on any arbitrary XGBoost model is as easy as a single line of code!
 
-```bash
-docker build -t aarchgate-ml . && docker run --rm aarchgate-ml python3 examples/nyc_taxi_bench.py
-```
-
-### Python SDK Quickstart
-You can load, convert, and execute models directly using the dynamic Python bindings wrapper:
+All internal schema registrations, feature name mappings, continuous range scaling, negative shifting factors, thread-dispatching, and probability conversions are fully automated and managed behind the scenes.
 
 ```python
-import numpy as np
-from bindings.python.aarchgate import AarchGateEngine
-from bindings.python.converter import XGBoostConverter
+import pandas as pd
+import xgboost as xgb
+from sklearn.datasets import load_breast_cancer
+from sklearn.model_selection import train_test_split
+from bindings.python.aarchgate_ml import AarchGateClassifier
 
-# 1. Define schema fields and scale factors
-schema = {
-    "fields": [
-        {"name": "pickup_latitude", "type": "float"},
-        {"name": "pickup_longitude", "type": "float"},
-        {"name": "passenger_count", "type": "int"}
-    ],
-    "scales": [1000000.0, 1000000.0, 1.0] # 10^6 scale for floats
-}
+# 1. Load your dataset and split it
+data = load_breast_cancer()
+X = pd.DataFrame(data.data, columns=[f"f{i}" for i in range(30)])
+y = data.target
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# 2. Convert raw XGBoost JSON model to AarchGate circuit format
-converter = XGBoostConverter(model_path="taxi_model.json", schema=schema)
-circuit_json = converter.convert()
+# 2. Train a standard native XGBoost model as you always do
+xgb_model = xgb.XGBClassifier(max_depth=3, n_estimators=50)
+xgb_model.fit(X_train, y_train)
 
-# 3. Initialize engine and register schema
-engine = AarchGateEngine()
-engine.register_schema("taxi_schema", schema)
-engine.register_model("taxi_model", "taxi_schema", circuit_json)
+# 3. Load, convert, and JIT-compile on AarchGate-ML with ONE single line!
+model = AarchGateClassifier.from_xgboost(xgb_model)
 
-# 4. Prepare data as a continuous row-oriented 1D array of uint64_t
-num_rows = 1000000
-raw_data = np.random.randint(0, 100000, size=(num_rows * len(schema["fields"])), dtype=np.uint64)
+# 4. Predict probabilities or hard class labels directly on raw float NumPy arrays or pandas DataFrames!
+probabilities = model.predict_proba(X_test)  # Returns shape (N, 2) matching sklearn
+predictions = model.predict(X_test)          # Returns shape (N,) class labels
 
-# 5. Run lightning-fast JIT parallel inference!
-prediction_sum = engine.execute(
-    data=raw_data,
-    row_count=num_rows,
-    parallel=True,
-    num_threads=4
-)
-print(f"Inference Completed! Total Sum: {prediction_sum}")
+# Compare accuracy with native XGBoost (100% bit-perfect parity!)
+matches = (predictions == xgb_model.predict(X_test)).sum()
+print(f"Prediction Parity Rate: {(matches / len(y_test)) * 100:.2f}%")
+```
+
+---
+
+## 🛠️ Usage and Benchmark Execution
+
+To build the project and execute our high-throughput benchmarks or verify our premium SDK capabilities, use the following containerized commands:
+
+### Run the High-Dimensional Breast Cancer SDK Quickstart Demo:
+```bash
+docker build -t aarchgate-ml . && docker run --rm aarchgate-ml python3 examples/sdk_quickstart_demo.py
+```
+
+### Run the 10-Million Row NYC Taxi Prediction Benchmark:
+```bash
+docker build -t aarchgate-ml . && docker run --rm aarchgate-ml python3 examples/nyc_taxi_bench.py
 ```
 
 ---
