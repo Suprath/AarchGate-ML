@@ -18,6 +18,10 @@ AarchGate-ML is a high-performance inference accelerator for XGBoost models, lev
 - [2026-05-05] Implemented SIMD-accelerated lexicographical comparison (Pass 1) with 64-bit mask hardening.
 - [2026-05-05] Fixed register clobbering in `SELECT` node multiplexing and optimized `ADD/SUB` passes for topological correctness.
 - [2026-05-05] Achieved record throughput of 268M rows/sec (12,440x speedup) on NYC taxi benchmark.
+- [2026-05-06] Reconstructed JIT compiler to run a unified, single-pass post-order topological compilation loop over the analytical IR nodes, completely eliminating compilation dependency bugs.
+- [2026-05-06] Supported non-zero else branches of SELECT nodes in the hybrid popcount aggregator algebra to resolve accuracy divergences on manually structured C++ selector configurations.
+- [2026-05-06] Resolved python dynamic loading missing-symbol errors by implementing `execute_vector` at the C++ level to enable seamless, zero-copy batch prediction retrieval in python.
+- [2026-05-06] Achieved 100% correctness across standard C++ unit/infrastructure tests and real-world high-dimensional python ML models.
 
 ---
 

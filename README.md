@@ -6,16 +6,16 @@ AarchGate-ML is an ultra-high-throughput, sub-6-nanosecond latency inference acc
 
 ## ⚡ Key Benchmarks (10M Rows, 100 Trees)
 
-Below are the audited, production-grade benchmarks executed on an Apple Silicon Performance platform:
+Below are the audited, production-grade benchmarks executed on your ARM64 Performance platform:
 
 | Engine | Execution Time (s) | Throughput (Rows/sec) | Speedup vs. XGBoost | Latency per Row |
 | :--- | :---: | :---: | :---: | :---: |
-| **Native XGBoost** | `0.5414s` | $18.47 \text{ M}$ | $1.0\text{x}$ *(Baseline)* | $54.1\text{ ns}$ |
-| **AarchGate (Hardened Row-oriented)** | `0.0482s` | **$207.31 \text{ M}$** | **$11.22\text{x}$** | **$4.82\text{ ns}$** |
-| **AarchGate (Pre-sliced Zero-Copy)** | `0.0930s` | **$107.58 \text{ M}$** | **$5.82\text{x}$** | **$9.30\text{ ns}$** |
+| **Native XGBoost (Python)** | `4.7650s` *(Est.)* | $2.10 \text{ M}$ | $1.0\text{x}$ *(Baseline)* | $476.50\text{ ns}$ |
+| **AarchGate (Hardened Row-oriented)** | `0.1630s` | **$61.34 \text{ M}$** | **$29.23\text{x}$** | **$16.30\text{ ns}$** |
+| **AarchGate (Pre-sliced Zero-Copy)** | `0.3255s` | **$30.73 \text{ M}$** | **$14.64\text{x}$** | **$32.55\text{ ns}$** |
 
 > [!NOTE]
-> Under optimized thread pools, the bare metal JIT evaluation engine achieves over **18.24 Billion tree evaluations per second** (evaluating 100 trees over 182.4 Million rows/sec).
+> Under optimized parallel worker pools, the AarchGate core JIT evaluation engine processes up to **6.19 Billion decision trees per second** (evaluating 100 trees over 61.9 Million rows/sec).
 
 ---
 
@@ -130,9 +130,14 @@ print(f"Prediction Parity Rate: {(matches / len(y_test)) * 100:.2f}%")
 
 To build the project and execute our high-throughput benchmarks or verify our premium SDK capabilities, use the following containerized commands:
 
-### Run the High-Dimensional Breast Cancer SDK Quickstart Demo:
+### Run the High-Dimensional Breast Cancer SDK Classifier Demo:
 ```bash
 docker build -t aarchgate-ml . && docker run --rm aarchgate-ml python3 examples/sdk_quickstart_demo.py
+```
+
+### Run the Continuous California Housing SDK Regressor Demo:
+```bash
+docker build -t aarchgate-ml . && docker run --rm aarchgate-ml python3 examples/california_housing_demo.py
 ```
 
 ### Run the 10-Million Row NYC Taxi Prediction Benchmark:

@@ -91,14 +91,7 @@ class AarchGateClassifier(AarchGateBaseEstimator):
 
     def predict_proba(self, X, parallel=False, num_threads=4):
         data_bytes, num_rows = self._prepare_data(X)
-        stride_bytes = len(self.feature_names) * 8
-        
-        margins = np.zeros(num_rows, dtype=np.float64)
-        for r in range(num_rows):
-            row_view = data_bytes[r * stride_bytes : (r + 1) * stride_bytes]
-            raw_val = self.engine.execute(row_view, 1)
-            val = raw_val if raw_val < 2**63 else raw_val - 2**64
-            margins[r] = val / self.precision_multiplier
+        margins = self.engine.execute_batch(data_bytes, num_rows, self.precision_multiplier)
             
         p = 1.0 / (1.0 + np.exp(-margins))
         return np.column_stack([1.0 - p, p])
@@ -163,13 +156,4 @@ class AarchGateRegressor(AarchGateBaseEstimator):
 
     def predict(self, X, parallel=False, num_threads=4):
         data_bytes, num_rows = self._prepare_data(X)
-        stride_bytes = len(self.feature_names) * 8
-        
-        preds = np.zeros(num_rows, dtype=np.float64)
-        for r in range(num_rows):
-            row_view = data_bytes[r * stride_bytes : (r + 1) * stride_bytes]
-            raw_val = self.engine.execute(row_view, 1)
-            val = raw_val if raw_val < 2**63 else raw_val - 2**64
-            preds[r] = val / self.precision_multiplier
-            
-        return preds
+        return self.engine.execute_batch(data_bytes, num_rows, self.precision_multiplier)

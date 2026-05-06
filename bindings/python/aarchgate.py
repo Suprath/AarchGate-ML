@@ -15,6 +15,9 @@ class ApexEngine:
             return _apex.execute_parallel(self._engine, data, count, num_threads)
         return _apex.execute(self._engine, data, count)
 
+    def execute_batch(self, data, count, precision_multiplier):
+        return _apex.execute_batch(self._engine, data, count, precision_multiplier)
+
     def execute_native(self, schema_name, data, num_blocks, parallel=False, num_threads=4):
         if parallel:
             return _apex.execute_native_parallel(self._engine, schema_name, data, num_blocks, num_threads)
