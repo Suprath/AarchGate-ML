@@ -91,9 +91,13 @@ def main():
     aarchgate_sum_raw = engine.execute(data_array, num_test_rows, parallel=False)
     aarchgate_sum = aarchgate_sum_raw if aarchgate_sum_raw < 2**63 else aarchgate_sum_raw - 2**64
     
+    aarchgate_parallel_raw = engine.execute(data_array, num_test_rows, parallel=True, num_threads=4)
+    aarchgate_parallel_sum = aarchgate_parallel_raw if aarchgate_parallel_raw < 2**63 else aarchgate_parallel_raw - 2**64
+    
     print("\n=== Real-World Verification ===")
     print(f"XGBoost Total Cumulative Margin Sum: {xgb_margins_scaled_sum}")
-    print(f"AarchGate Dynamic Prediction Sum:     {aarchgate_sum}")
+    print(f"AarchGate Dynamic Sequential Sum:     {aarchgate_sum}")
+    print(f"AarchGate Dynamic Parallel Sum:       {aarchgate_parallel_sum}")
     
     # Compute matching accuracy
     margin = abs(xgb_margins_scaled_sum - aarchgate_sum) / abs(xgb_margins_scaled_sum) * 100
