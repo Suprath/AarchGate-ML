@@ -50,7 +50,7 @@ def main():
     fields = [(f"f{i}", i * 8, 64, 0) for i in range(30)]
     stride_bytes = 30 * 8  # 240 bytes per row
     engine.register_schema("cancer_schema", fields, stride_bytes)
-    engine.set_logic("cancer_schema", ir_root, 0)
+    engine.set_logic("cancer_schema", ir_root, 2)
     
     print("Preparing quantized dataset...")
     num_test_rows = X_test.shape[0]

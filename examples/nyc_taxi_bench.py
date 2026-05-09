@@ -120,7 +120,7 @@ def run_benchmark():
     ]
     stride = 40
     engine.register_schema("taxi_schema", fields, stride)
-    engine.set_logic("taxi_schema", ir_root, 0)
+    engine.set_logic("taxi_schema", ir_root, 2)
     
     print("Preparing quantized data...")
     # Shift features by +1000.0 to map standard normal to positive domain for unsigned JIT comparison
