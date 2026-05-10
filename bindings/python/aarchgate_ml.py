@@ -37,7 +37,7 @@ class AarchGateBaseEstimator:
 
 class AarchGateClassifier(AarchGateBaseEstimator):
     @classmethod
-    def from_xgboost(cls, model_or_booster, precision_multiplier=100000.0, shift_negative=1000.0):
+    def from_xgboost(cls, model_or_booster, precision_multiplier=100000.0, shift_negative=1000.0, execution_mode=0):
         inst = cls(precision_multiplier, shift_negative)
         
         if hasattr(model_or_booster, "get_booster"):
@@ -58,7 +58,7 @@ class AarchGateClassifier(AarchGateBaseEstimator):
         fields = [(name, i * 8, 64, 0) for i, name in enumerate(inst.feature_names)]
         stride_bytes = num_features * 8
         inst.engine.register_schema(inst.schema_name, fields, stride_bytes)
-        inst.engine.set_logic(inst.schema_name, ir_root, 0) # 0 = BIT_SLICED
+        inst.engine.set_logic(inst.schema_name, ir_root, execution_mode)
         
         return inst
 
@@ -102,7 +102,7 @@ class AarchGateClassifier(AarchGateBaseEstimator):
 
 class AarchGateRegressor(AarchGateBaseEstimator):
     @classmethod
-    def from_xgboost(cls, model_or_booster, precision_multiplier=100000.0, shift_negative=1000.0):
+    def from_xgboost(cls, model_or_booster, precision_multiplier=100000.0, shift_negative=1000.0, execution_mode=0):
         inst = cls(precision_multiplier, shift_negative)
         
         if hasattr(model_or_booster, "get_booster"):
@@ -123,7 +123,7 @@ class AarchGateRegressor(AarchGateBaseEstimator):
         fields = [(name, i * 8, 64, 0) for i, name in enumerate(inst.feature_names)]
         stride_bytes = num_features * 8
         inst.engine.register_schema(inst.schema_name, fields, stride_bytes)
-        inst.engine.set_logic(inst.schema_name, ir_root, 0) # BIT_SLICED
+        inst.engine.set_logic(inst.schema_name, ir_root, execution_mode)
         
         return inst
 
